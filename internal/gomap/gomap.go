@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/bits"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -21,11 +20,8 @@ type HostInfo struct {
 }
 
 func (host *HostInfo) Scan() {
-	var wg sync.WaitGroup
 	host.Reachable = true // For now
-	wg.Add(1)
-	host.OpenTcpPorts = scanTcpForIp(host.Address, &wg)
-	wg.Wait()
+	host.OpenTcpPorts = scanTcpForIp(host.Address)
 }
 
 func WellKnownPorts() []uint16 {
@@ -37,7 +33,6 @@ func Scan(cidr string) *App {
 	if err != nil {
 		panic(err)
 	}
-
 	hostInfoList := make([]HostInfo, 0)
 	ch := make(chan HostInfo)
 	numIps := countNumberOfIps(network.Mask)
@@ -58,12 +53,11 @@ func Scan(cidr string) *App {
 	return &App{IpRange: network, HostInfoList: hostInfoList}
 }
 
-func scanTcpForIp(ip string, wg *sync.WaitGroup) (result []uint16) {
-	defer wg.Done()
+func scanTcpForIp(ip string) (result []uint16) {
 	result = make([]uint16, 0)
 	timeout := 200 * time.Millisecond
 	for _, port := range WellKnownPorts() {
-		address := ip + ":" + fmt.Sprintf("%d", port)
+		address := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
 		conn, err := net.DialTimeout("tcp", address, timeout)
 		if err == nil {
 			result = append(result, port)
