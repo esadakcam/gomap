@@ -2,8 +2,6 @@ package gomap
 
 import (
 	"fmt"
-	"math"
-	"math/bits"
 	"net"
 	"sync"
 	"time"
@@ -93,12 +91,4 @@ func inc(ip net.IP) {
 			break
 		}
 	}
-}
-
-func countNumberOfIps(mask net.IPMask) int {
-	numOfOnes := 0
-	for _, byt := range mask {
-		numOfOnes += bits.OnesCount8(uint8(byt))
-	}
-	return int(math.Pow(2, float64(32-numOfOnes)))
 }
