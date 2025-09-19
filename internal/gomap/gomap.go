@@ -2,6 +2,8 @@ package gomap
 
 import (
 	"fmt"
+	"math"
+	"math/bits"
 	"net"
 	"sync"
 	"time"
@@ -13,7 +15,7 @@ type App struct {
 }
 
 type HostInfo struct {
-	Address      net.IP
+	Address      string //IPV4 Address
 	Reachable    bool
 	OpenTcpPorts []uint16
 }
@@ -22,7 +24,7 @@ func (host *HostInfo) Scan() {
 	var wg sync.WaitGroup
 	host.Reachable = true // For now
 	wg.Add(1)
-	host.OpenTcpPorts = scanTcpForIp(host.Address.String(), &wg)
+	host.OpenTcpPorts = scanTcpForIp(host.Address, &wg)
 	wg.Wait()
 }
 
@@ -37,24 +39,22 @@ func Scan(cidr string) *App {
 	}
 
 	hostInfoList := make([]HostInfo, 0)
-	var wg sync.WaitGroup
-	var mtx sync.Mutex
+	ch := make(chan HostInfo)
+	numIps := countNumberOfIps(network.Mask)
 
 	for ip := network.IP.Mask(network.Mask); network.Contains(ip); inc(ip) {
-		wg.Add(1)
-		ipCopy := make(net.IP, len(ip))
-		copy(ipCopy, ip)
-		go func(hostInfoList *[]HostInfo, ip net.IP, wg *sync.WaitGroup, mtx *sync.Mutex) {
-			defer wg.Done()
+		go func(ip string, ch chan HostInfo) {
 			hostInfo := HostInfo{Address: ip}
 			hostInfo.Scan()
-			mtx.Lock()
-			*hostInfoList = append(*hostInfoList, hostInfo)
-			mtx.Unlock()
-
-		}(&hostInfoList, ipCopy, &wg, &mtx)
+			ch <- hostInfo
+		}(ip.String(), ch)
 	}
-	wg.Wait()
+
+	for i := 0; i < numIps; i++ {
+		hostInfo := <-ch
+		hostInfoList = append(hostInfoList, hostInfo)
+	}
+
 	return &App{IpRange: network, HostInfoList: hostInfoList}
 }
 
@@ -64,7 +64,6 @@ func scanTcpForIp(ip string, wg *sync.WaitGroup) (result []uint16) {
 	timeout := 200 * time.Millisecond
 	for _, port := range WellKnownPorts() {
 		address := ip + ":" + fmt.Sprintf("%d", port)
-		fmt.Println(ip, port)
 		conn, err := net.DialTimeout("tcp", address, timeout)
 		if err == nil {
 			result = append(result, port)
@@ -81,4 +80,12 @@ func inc(ip net.IP) {
 			break
 		}
 	}
+}
+
+func countNumberOfIps(mask net.IPMask) int {
+	numOfOnes := 0
+	for _, byt := range mask {
+		numOfOnes += bits.OnesCount8(uint8(byt))
+	}
+	return int(math.Pow(2, float64(32-numOfOnes)))
 }
