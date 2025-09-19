@@ -34,11 +34,10 @@ func Scan(cidr string) *App {
 	if err != nil {
 		panic(err)
 	}
-	numOfWorkers := 100
+	numOfWorkers := 500
 
-	numIps := countNumberOfIps(network.Mask)
-	jobs := make(chan string, numIps)
-	results := make(chan HostInfo, numIps)
+	jobs := make(chan string)
+	results := make(chan HostInfo)
 
 	var wg sync.WaitGroup
 
@@ -46,19 +45,19 @@ func Scan(cidr string) *App {
 		wg.Add(1)
 		go func() { defer wg.Done(); scanWorker(jobs, results) }()
 	}
-
-	for ip := network.IP.Mask(network.Mask); network.Contains(ip); inc(ip) {
-		jobs <- ip.String()
-	}
-	close(jobs)
+	go func() {
+		for ip := network.IP.Mask(network.Mask); network.Contains(ip); inc(ip) {
+			jobs <- ip.String()
+		}
+		close(jobs)
+	}()
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
 	hostInfoList := make([]HostInfo, 0)
-	for i := 0; i < numIps; i++ {
-		hostInfo := <-results
+	for hostInfo := range results {
 		hostInfoList = append(hostInfoList, hostInfo)
 	}
 
