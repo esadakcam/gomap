@@ -44,14 +44,14 @@ func Scan(cidr string) *App {
 		go func() { defer wg.Done(); scanWorker(jobs, results) }()
 	}
 	go func() {
+		wg.Wait()
+		close(results)
+	}()
+	go func() {
 		for ip := network.IP.Mask(network.Mask); network.Contains(ip); inc(ip) {
 			jobs <- ip.String()
 		}
 		close(jobs)
-	}()
-	go func() {
-		wg.Wait()
-		close(results)
 	}()
 
 	hostInfoList := make([]HostInfo, 0)
