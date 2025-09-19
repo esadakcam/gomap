@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/bits"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -33,24 +34,43 @@ func Scan(cidr string) *App {
 	if err != nil {
 		panic(err)
 	}
-	hostInfoList := make([]HostInfo, 0)
-	ch := make(chan HostInfo)
-	numIps := countNumberOfIps(network.Mask)
+	numOfWorkers := 100
 
-	for ip := network.IP.Mask(network.Mask); network.Contains(ip); inc(ip) {
-		go func(ip string, ch chan HostInfo) {
-			hostInfo := HostInfo{Address: ip}
-			hostInfo.Scan()
-			ch <- hostInfo
-		}(ip.String(), ch)
+	numIps := countNumberOfIps(network.Mask)
+	jobs := make(chan string, numIps)
+	results := make(chan HostInfo, numIps)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < numOfWorkers; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); scanWorker(jobs, results) }()
 	}
 
+	for ip := network.IP.Mask(network.Mask); network.Contains(ip); inc(ip) {
+		jobs <- ip.String()
+	}
+	close(jobs)
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	hostInfoList := make([]HostInfo, 0)
 	for i := 0; i < numIps; i++ {
-		hostInfo := <-ch
+		hostInfo := <-results
 		hostInfoList = append(hostInfoList, hostInfo)
 	}
 
 	return &App{IpRange: network, HostInfoList: hostInfoList}
+}
+
+func scanWorker(jobs chan string, results chan HostInfo) {
+	for ip := range jobs {
+		hostInfo := HostInfo{Address: ip}
+		hostInfo.Scan()
+		results <- hostInfo
+	}
 }
 
 func scanTcpForIp(ip string) (result []uint16) {
