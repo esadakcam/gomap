@@ -1,10 +1,11 @@
 package gomap
 
 import (
-	"fmt"
 	"net"
 	"sync"
-	"time"
+
+	"github.com/esadakcam/gomap/internal/icmp"
+	"github.com/esadakcam/gomap/internal/tcp"
 )
 
 type App struct {
@@ -19,12 +20,13 @@ type HostInfo struct {
 }
 
 func (host *HostInfo) Scan() {
-	host.Reachable = true // For now
-	host.OpenTcpPorts = scanTcpForIp(host.Address)
-}
 
-func WellKnownPorts() []uint16 {
-	return []uint16{22, 80, 443, 53}
+	host.Reachable = icmp.Ping(host.Address)
+	if host.Reachable {
+		host.OpenTcpPorts = tcp.Scan(host.Address)
+		return
+	}
+	host.OpenTcpPorts = make([]uint16, 0)
 }
 
 func Scan(cidr string) *App {
@@ -68,20 +70,6 @@ func scanWorker(jobs chan string, results chan HostInfo) {
 		hostInfo.Scan()
 		results <- hostInfo
 	}
-}
-
-func scanTcpForIp(ip string) (result []uint16) {
-	result = make([]uint16, 0)
-	timeout := 200 * time.Millisecond
-	for _, port := range WellKnownPorts() {
-		address := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
-		conn, err := net.DialTimeout("tcp", address, timeout)
-		if err == nil {
-			result = append(result, port)
-			conn.Close()
-		}
-	}
-	return
 }
 
 func inc(ip net.IP) {
