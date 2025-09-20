@@ -14,6 +14,9 @@ func main() {
 	}
 
 	ipRange := os.Args[1]
-	app := gomap.Scan(ipRange)
+	app, err := gomap.Scan(ipRange)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(app)
 }

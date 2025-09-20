@@ -42,18 +42,18 @@ func Ping(address string) bool {
 
 		if err != nil {
 			fmt.Println("failed to marshal ICMP message: ", err)
-			return false
+			continue
 		}
 
 		if err := conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
 			fmt.Println("failed to set read deadline: ", err)
-			return false
+			continue
 		}
 
 		timeStart := time.Now()
 		if _, err := conn.Write(msgBytes); err != nil {
 			fmt.Println("failed to send ICMP message: ", err)
-			return false
+			continue
 		}
 
 		resp := make([]byte, 512)
@@ -61,13 +61,13 @@ func Ping(address string) bool {
 		timeEnd := time.Now()
 		if err != nil {
 			fmt.Println("failed to read ICMP response: ", err)
-			return false
+			continue
 		}
 
 		parsedMsg, err := icmp.ParseMessage(1, resp[:n])
 		if err != nil {
 			fmt.Println("failed to parse ICMP message: ", err)
-			return false
+			continue
 		}
 
 		echoType := parsedMsg.Type

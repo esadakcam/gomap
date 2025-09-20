@@ -22,17 +22,13 @@ type HostInfo struct {
 func (host *HostInfo) Scan() {
 
 	host.Reachable = icmp.Ping(host.Address)
-	if host.Reachable {
-		host.OpenTcpPorts = tcp.Scan(host.Address)
-		return
-	}
-	host.OpenTcpPorts = make([]uint16, 0)
+	host.OpenTcpPorts = tcp.Scan(host.Address)
 }
 
-func Scan(cidr string) *App {
+func Scan(cidr string) (*App, error) {
 	_, network, err := net.ParseCIDR(cidr)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	numOfWorkers := 500
 
@@ -58,10 +54,12 @@ func Scan(cidr string) *App {
 
 	hostInfoList := make([]HostInfo, 0)
 	for hostInfo := range results {
-		hostInfoList = append(hostInfoList, hostInfo)
+		if hostInfo.Reachable || len(hostInfo.OpenTcpPorts) > 0 {
+			hostInfoList = append(hostInfoList, hostInfo)
+		}
 	}
 
-	return &App{IpRange: network, HostInfoList: hostInfoList}
+	return &App{IpRange: network, HostInfoList: hostInfoList}, nil
 }
 
 func scanWorker(jobs chan string, results chan HostInfo) {
